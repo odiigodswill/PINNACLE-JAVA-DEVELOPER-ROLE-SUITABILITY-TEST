@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<AnchorPane xmlns:fx="http://javafx.com/fxml" fx:controller="com.pinnacle.frontend.controller.MainController">
+    <VBox spacing="8.0" AnchorPane.topAnchor="8.0" AnchorPane.leftAnchor="8.0" AnchorPane.rightAnchor="8.0"
+          AnchorPane.bottomAnchor="8.0">
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <Label text="Search:"/>
+            <TextField fx:id="searchField" promptText="Title or author"/>
+            <Button text="Search" onAction="#onSearch"/>
+            <Button text="Reload" onAction="#onReload"/>
+        </HBox>
+
+        <TableView fx:id="tableView" prefHeight="300">
+            <columns>
+                <TableColumn fx:id="colId" text="ID" prefWidth="60"/>
+                <TableColumn fx:id="colTitle" text="Title" prefWidth="200"/>
+                <TableColumn fx:id="colAuthor" text="Author" prefWidth="150"/>
+                <TableColumn fx:id="colIsbn" text="ISBN" prefWidth="120"/>
+                <TableColumn fx:id="colPublished" text="Published" prefWidth="120"/>
+            </columns>
+        </TableView>
+
+        <Pagination fx:id="pagination" pageCount="1" maxPageIndicatorCount="7"/>
+
+        <TitledPane text="Book Details" expanded="true">
+            <content>
+                <!--                <GridPane hgap="8" vgap="8" padding="8.0">-->
+                <GridPane hgap="8" vgap="8">
+                    <padding>
+                        <Insets top="8" right="8" bottom="8" left="8"/>
+                    </padding>
+
+                    <columnConstraints>
+                        <ColumnConstraints percentWidth="25"/>
+                        <ColumnConstraints percentWidth="75"/>
+                    </columnConstraints>
+                    <!--                    <RowConstraints />-->
+
+                    <Label text="Title:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                    <TextField fx:id="titleField" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+                    <Label text="Author:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                    <TextField fx:id="authorField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+
+                    <Label text="ISBN:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                    <TextField fx:id="isbnField" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+
+                    <Label text="Published Date (yyyy-mm-dd):" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                    <TextField fx:id="publishedField" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+
+                    <HBox spacing="8" GridPane.rowIndex="4" GridPane.columnIndex="1" alignment="CENTER_RIGHT">
+                        <Button text="Add" onAction="#onAdd"/>
+                        <Button text="Update" onAction="#onUpdate"/>
+                        <Button text="Delete" onAction="#onDelete"/>
+                    </HBox>
+                </GridPane>
+            </content>
+        </TitledPane>
+    </VBox>
+</AnchorPane>
