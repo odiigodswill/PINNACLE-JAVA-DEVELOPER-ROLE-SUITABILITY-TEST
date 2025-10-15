@@ -4,86 +4,88 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pinnacle.frontend.model.Book;
 import lombok.Data;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
+import org.springframework.http.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class BookService {
 
-    private final RestClient restClient;
+    private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final String BASE_URL = "http://localhost:8080/api/books";
-
-    public BookService() {
-        restClient = RestClient.create();
-    }
+    private static final String BASE_URL = "http://localhost:8080/api/books";
 
     // ✅ Add a new book
     public Book save(Book book) {
         try {
-            return restClient.post()
-                    .uri(BASE_URL)
-                    .body(book)
-                    .retrieve()
-                    .body(Book.class);
-        } catch (RestClientResponseException e) {
-            throw new RuntimeException("Failed to save book: " + e.getResponseBodyAsString(), e);
+            ResponseEntity<Book> response = restTemplate.postForEntity(BASE_URL, book, Book.class);
+            return response.getBody();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to save book: " + e.getMessage(), e);
         }
     }
 
     // ✅ Update an existing book
     public Book update(Book book) {
         try {
-            return restClient.put()
-                    .uri(BASE_URL + "/" + book.getId())
-                    .body(book)
-                    .retrieve()
-                    .body(Book.class);
-        } catch (RestClientResponseException e) {
-            throw new RuntimeException("Failed to update book: " + e.getResponseBodyAsString(), e);
+            String url = BASE_URL + "/" + book.getId();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Book> entity = new HttpEntity<>(book, headers);
+            restTemplate.put(url, entity);
+
+            // GET updated book back for confirmation
+            return restTemplate.getForObject(url, Book.class);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to update book: " + e.getMessage(), e);
         }
     }
 
     // ✅ Delete book by ID
     public void delete(Long id) {
         try {
-            restClient.delete()
-                    .uri(BASE_URL + "/" + id)
-                    .retrieve();
-        } catch (RestClientResponseException e) {
-            throw new RuntimeException("Failed to delete book: " + e.getResponseBodyAsString(), e);
+            String url = BASE_URL + "/" + id;
+            restTemplate.delete(url);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to delete book: " + e.getMessage(), e);
         }
     }
 
-    // ✅ Fetch all books (first page by default)
+    // ✅ Fetch all books (no pagination version)
+    public List<Book> findAll() {
+        try {
+            ResponseEntity<List> response = restTemplate.getForEntity(BASE_URL, List.class);
+            return objectMapper.convertValue(response.getBody(), new TypeReference<List<Book>>() {});
+        } catch (Exception e) {
+            System.err.println("Error fetching books: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // ✅ Fetch books with pagination or search
     public Page<Book> query(int pageIndex, int pageSize, String search) {
         try {
-            String url = BASE_URL + "?page=" + pageIndex + "&size=" + pageSize;
+            String url;
             if (search != null && !search.isBlank()) {
                 url = BASE_URL + "/search?keyword=" + search;
-                List<Book> list = restClient.get()
-                        .uri(url)
-                        .retrieve()
-                        .body(List.class);
-                return new Page<>(objectMapper.convertValue(list, new TypeReference<List<Book>>(){}),
-                        pageIndex, pageSize, list.size());
+                List<Book> list = restTemplate.getForObject(url, List.class);
+                List<Book> books = objectMapper.convertValue(list, new TypeReference<List<Book>>() {});
+                return new Page<>(books, pageIndex, pageSize, books.size());
             } else {
-                var pageResponse = restClient.get()
-                        .uri(url)
-                        .retrieve()
-                        .body(String.class);
+                url = BASE_URL + "?page=" + pageIndex + "&size=" + pageSize;
+                String jsonResponse = restTemplate.getForObject(url, String.class);
 
-                // Parse JSON manually because Spring Boot pagination wraps results in content[], etc.
-                var jsonNode = objectMapper.readTree(pageResponse);
-                var listNode = jsonNode.get("content");
-                var totalElements = jsonNode.get("totalElements").asInt();
-                var totalPages = jsonNode.get("totalPages").asInt();
+                Map<String, Object> jsonNode = objectMapper.readValue(jsonResponse, new TypeReference<>() {});
+                List<Book> books = objectMapper.convertValue(jsonNode.get("content"), new TypeReference<List<Book>>() {});
 
-                List<Book> books = objectMapper.convertValue(listNode, new TypeReference<List<Book>>() {});
+                int totalElements = (int) jsonNode.getOrDefault("totalElements", books.size());
+                int totalPages = (int) jsonNode.getOrDefault("totalPages", 1);
+
                 return new Page<>(books, pageIndex, pageSize, totalElements, totalPages);
             }
         } catch (Exception e) {
@@ -93,7 +95,7 @@ public class BookService {
     }
 
     public void reload() {
-        // No caching implemented; so reload just does nothing
+        // For future caching or refresh logic if needed
     }
 
     // ✅ Pagination helper class
