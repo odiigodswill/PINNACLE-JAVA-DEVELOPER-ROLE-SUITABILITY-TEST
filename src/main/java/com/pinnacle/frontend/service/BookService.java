@@ -1,91 +1,121 @@
 package com.pinnacle.frontend.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pinnacle.frontend.model.Book;
 import lombok.Data;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
-import java.time.LocalDate;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
+import java.util.Collections;
+import java.util.List;
 
 @Data
 public class BookService {
 
-    private final Map<Long, Book> store = new ConcurrentHashMap<>();
-    private final AtomicLong idGen = new AtomicLong(1);
+    private final RestClient restClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final String BASE_URL = "http://localhost:8080/api/books"; // ✅ Adjust if backend runs on different port
 
     public BookService() {
-        // seed with sample data
-        for (int i = 1; i <= 53; i++) {
-            save(new Book(null, "Book title " + i, "Author " + (i % 7 + 1), "ISBN" + i,
-                    LocalDate.now().minusDays(i * 30L)));
+        restClient = RestClient.create();
+    }
+
+    // ✅ Add a new book
+    public Book save(Book book) {
+        try {
+            return restClient.post()
+                    .uri(BASE_URL)
+                    .body(book)
+                    .retrieve()
+                    .body(Book.class);
+        } catch (RestClientResponseException e) {
+            throw new RuntimeException("Failed to save book: " + e.getResponseBodyAsString(), e);
         }
     }
 
-    public synchronized Book save(Book book) {
-        if (book.getId() == null) {
-            long id = idGen.getAndIncrement();
-            book.setId(id);
+    // ✅ Update an existing book
+    public Book update(Book book) {
+        try {
+            return restClient.put()
+                    .uri(BASE_URL + "/" + book.getId())
+                    .body(book)
+                    .retrieve()
+                    .body(Book.class);
+        } catch (RestClientResponseException e) {
+            throw new RuntimeException("Failed to update book: " + e.getResponseBodyAsString(), e);
         }
-        store.put(book.getId(), book);
-        return book;
     }
 
-    public synchronized boolean delete(Long id) {
-        return store.remove(id) != null;
+    // ✅ Delete book by ID
+    public void delete(Long id) {
+        try {
+            restClient.delete()
+                    .uri(BASE_URL + "/" + id)
+                    .retrieve();
+        } catch (RestClientResponseException e) {
+            throw new RuntimeException("Failed to delete book: " + e.getResponseBodyAsString(), e);
+        }
     }
 
-    public Optional<Book> findById(Long id) {
-        return Optional.ofNullable(store.get(id));
-    }
-
-    /**
-     * Query page of data. Page index is 0-based.
-     */
+    // ✅ Fetch all books (first page by default)
     public Page<Book> query(int pageIndex, int pageSize, String search) {
-        List<Book> list = new ArrayList<>(store.values());
-        if (search != null && !search.isBlank()) {
-            String s = search.toLowerCase();
-            list = list.stream()
-                    .filter(b -> (b.getTitle() != null && b.getTitle().toLowerCase().contains(s))
-                            || (b.getAuthor() != null && b.getAuthor().toLowerCase().contains(s)))
-                    .collect(Collectors.toList());
+        try {
+            String url = BASE_URL + "?page=" + pageIndex + "&size=" + pageSize;
+            if (search != null && !search.isBlank()) {
+                url = BASE_URL + "/search?keyword=" + search;
+                List<Book> list = restClient.get()
+                        .uri(url)
+                        .retrieve()
+                        .body(List.class);
+                return new Page<>(objectMapper.convertValue(list, new TypeReference<List<Book>>(){}),
+                        pageIndex, pageSize, list.size());
+            } else {
+                var pageResponse = restClient.get()
+                        .uri(url)
+                        .retrieve()
+                        .body(String.class);
+
+                // Parse JSON manually because Spring Boot pagination wraps results in content[], etc.
+                var jsonNode = objectMapper.readTree(pageResponse);
+                var listNode = jsonNode.get("content");
+                var totalElements = jsonNode.get("totalElements").asInt();
+                var totalPages = jsonNode.get("totalPages").asInt();
+
+                List<Book> books = objectMapper.convertValue(listNode, new TypeReference<List<Book>>() {});
+                return new Page<>(books, pageIndex, pageSize, totalElements, totalPages);
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching books: " + e.getMessage());
+            return new Page<>(Collections.emptyList(), pageIndex, pageSize, 0, 1);
         }
-        list.sort(Comparator.comparing(Book::getId));
-        int total = list.size();
-        int from = pageIndex * pageSize;
-        int to = Math.min(from + pageSize, total);
-        List<Book> pageItems = new ArrayList<>();
-        if (from < total) pageItems = list.subList(from, to);
-        return new Page<>(pageItems, pageIndex, pageSize, total);
     }
 
     public void reload() {
-        // For a simulated backend, reload might re-seed or do nothing.
-        // We will do nothing here — but method is present to satisfy the UI reload action.
+        // No caching implemented; so reload just does nothing
     }
 
+    // ✅ Pagination helper class
+    @Data
     public static class Page<T> {
         private final List<T> items;
         private final int pageIndex;
         private final int pageSize;
         private final int totalCount;
+        private final int totalPages;
 
         public Page(List<T> items, int pageIndex, int pageSize, int totalCount) {
+            this(items, pageIndex, pageSize, totalCount,
+                    (int) Math.ceil((double) totalCount / pageSize));
+        }
+
+        public Page(List<T> items, int pageIndex, int pageSize, int totalCount, int totalPages) {
             this.items = items;
             this.pageIndex = pageIndex;
             this.pageSize = pageSize;
             this.totalCount = totalCount;
-        }
-
-        public List<T> getItems() { return items; }
-        public int getPageIndex() { return pageIndex; }
-        public int getPageSize() { return pageSize; }
-        public int getTotalCount() { return totalCount; }
-
-        public int getTotalPages() {
-            return (int) Math.ceil((double) totalCount / pageSize);
+            this.totalPages = totalPages;
         }
     }
 }

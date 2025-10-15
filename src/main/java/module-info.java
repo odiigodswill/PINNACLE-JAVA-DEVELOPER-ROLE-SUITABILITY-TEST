@@ -10,7 +10,8 @@ module com.pinnacle.frontend {
     requires org.kordamp.bootstrapfx.core;
 //    requires eu.hansolo.tilesfx;
     requires static lombok;
-    requires java.desktop;
+    requires spring.web;
+    requires com.fasterxml.jackson.databind;
 
     opens com.pinnacle.frontend.controller to javafx.fxml;
     exports com.pinnacle.frontend;
