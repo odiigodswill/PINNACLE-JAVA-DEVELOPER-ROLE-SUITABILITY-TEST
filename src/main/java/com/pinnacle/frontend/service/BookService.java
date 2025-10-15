@@ -2,11 +2,15 @@ package com.pinnacle.frontend.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.pinnacle.frontend.model.Book;
 import lombok.Data;
 import org.springframework.http.*;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -14,57 +18,45 @@ import java.util.Map;
 @Data
 public class BookService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+//    private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private static final String BASE_URL = "http://localhost:8080/api/books";
+    private final RestTemplate restTemplate;
+    private final String BASE_URL = "http://localhost:8080/api/books";
 
-    // ✅ Add a new book
+    public BookService() {
+        // ✅ Initialize Jackson mapper for LocalDate
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+
+        // ✅ Register Jackson converter manually
+        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
+        converter.setObjectMapper(objectMapper);
+
+        List<HttpMessageConverter<?>> converters = new ArrayList<>();
+        converters.add(converter);
+
+        restTemplate = new RestTemplate(converters);
+    }
+
+    // ✅ POST - Add a new book
     public Book save(Book book) {
-        try {
-            ResponseEntity<Book> response = restTemplate.postForEntity(BASE_URL, book, Book.class);
-            return response.getBody();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to save book: " + e.getMessage(), e);
-        }
+        return restTemplate.postForObject(BASE_URL, book, Book.class);
     }
 
-    // ✅ Update an existing book
-    public Book update(Book book) {
-        try {
-            String url = BASE_URL + "/" + book.getId();
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Book> entity = new HttpEntity<>(book, headers);
-            restTemplate.put(url, entity);
-
-            // GET updated book back for confirmation
-            return restTemplate.getForObject(url, Book.class);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to update book: " + e.getMessage(), e);
-        }
+    // ✅ PUT - Update a book
+    public void update(Book book) {
+        restTemplate.put(BASE_URL + "/" + book.getId(), book);
     }
 
-    // ✅ Delete book by ID
+    // ✅ DELETE - Delete book
     public void delete(Long id) {
-        try {
-            String url = BASE_URL + "/" + id;
-            restTemplate.delete(url);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to delete book: " + e.getMessage(), e);
-        }
+        restTemplate.delete(BASE_URL + "/" + id);
     }
 
-    // ✅ Fetch all books (no pagination version)
-    public List<Book> findAll() {
-        try {
-            ResponseEntity<List> response = restTemplate.getForEntity(BASE_URL, List.class);
-            return objectMapper.convertValue(response.getBody(), new TypeReference<List<Book>>() {});
-        } catch (Exception e) {
-            System.err.println("Error fetching books: " + e.getMessage());
-            return Collections.emptyList();
-        }
+    // ✅ GET - Fetch all
+    public Book[] findAll() {
+        return restTemplate.getForObject(BASE_URL, Book[].class);
     }
 
     // ✅ Fetch books with pagination or search
