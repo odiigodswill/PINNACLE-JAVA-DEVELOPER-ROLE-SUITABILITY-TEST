@@ -16,7 +16,7 @@ public class BookService {
     private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final String BASE_URL = "http://localhost:8080/api/books"; // ✅ Adjust if backend runs on different port
+    private final String BASE_URL = "http://localhost:8080/api/books";
 
     public BookService() {
         restClient = RestClient.create();
