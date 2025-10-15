@@ -5,12 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.pinnacle.frontend.model.Book;
 import lombok.Data;
-import org.springframework.http.*;
-import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
-import java.util.ArrayList;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -18,45 +17,35 @@ import java.util.Map;
 @Data
 public class BookService {
 
-//    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
     private final RestTemplate restTemplate;
     private final String BASE_URL = "http://localhost:8080/api/books";
+    ObjectMapper objectMapper = new ObjectMapper();
 
     public BookService() {
-        // ✅ Initialize Jackson mapper for LocalDate
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
+        this.restTemplate = new RestTemplate();
 
-        // ✅ Register Jackson converter manually
+        // Configure ObjectMapper to handle LocalDate and Java 8 time types
+
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        // Use the configured ObjectMapper
         MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
         converter.setObjectMapper(objectMapper);
 
-        List<HttpMessageConverter<?>> converters = new ArrayList<>();
-        converters.add(converter);
-
-        restTemplate = new RestTemplate(converters);
+        this.restTemplate.getMessageConverters().add(converter);
     }
 
-    // ✅ POST - Add a new book
+    public Book[] getAllBooks() {
+        return restTemplate.getForObject(BASE_URL, Book[].class);
+    }
+
     public Book save(Book book) {
         return restTemplate.postForObject(BASE_URL, book, Book.class);
     }
 
-    // ✅ PUT - Update a book
-    public void update(Book book) {
-        restTemplate.put(BASE_URL + "/" + book.getId(), book);
-    }
-
-    // ✅ DELETE - Delete book
     public void delete(Long id) {
         restTemplate.delete(BASE_URL + "/" + id);
-    }
-
-    // ✅ GET - Fetch all
-    public Book[] findAll() {
-        return restTemplate.getForObject(BASE_URL, Book[].class);
     }
 
     // ✅ Fetch books with pagination or search
